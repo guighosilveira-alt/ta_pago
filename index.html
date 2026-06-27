@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tá_pago? - Gestão Financeira</title>
+    <style>
+        :root { --primary: #6366f1; --success: #22c55e; --danger: #ef4444; --bg-dark: #0f172a; --text-light: #f8fafc; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; background-color: #020617; color: var(--text-light); }
+        
+        .app-container { width: 100%; max-width: 450px; margin: auto; min-height: 100vh; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; padding-top: 70px; overflow: hidden; }
+
+        /* Estilos de Fundo Dinâmico */
+        .fundo-base { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; background-repeat: no-repeat; z-index: 0; transition: background-image 0.5s ease; }
+        .fundo-1 { background-image: url('fundo1.png'); }
+        .fundo-2 { background-image: url('fundo2.png'); }
+
+        .screen { display: none; width: 100%; padding: 20px; text-align: center; box-sizing: border-box; flex-direction: column; align-items: center; position: relative; z-index: 1; }
+        .active { display: flex; }
+        
+        #sideMenu { position: fixed; top: 0; left: -280px; width: 250px; height: 100%; background: #1e293b; z-index: 1000; transition: 0.3s; padding: 60px 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.5); box-sizing: border-box; }
+        #sideMenu.open { left: 0; }
+        .menu-btn { position: absolute; top: 20px; left: 20px; font-size: 28px; cursor: pointer; color: white; z-index: 1002; background: rgba(0,0,0,0.5); border: none; border-radius: 5px; padding: 5px 12px; }
+
+        .modern-btn { width: 90%; max-width: 320px; padding: 14px; margin: 8px 0; border: none; border-radius: 8px; background: var(--primary); color: white; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .input-field { width: 90%; max-width: 320px; padding: 14px; margin: 8px 0; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; box-sizing: border-box; }
+        .card { background: rgba(30, 41, 59, 0.9); padding: 15px; border-radius: 12px; margin: 10px auto; width: 85%; border-left: 8px solid; display: flex; flex-direction: column; align-items: center; }
+        #popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); padding: 20px; display: none; overflow-y: auto; z-index: 2000; box-sizing: border-box; align-items: center; flex-direction: column; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <button class="menu-btn" onclick="toggleMenu()">☰</button>
+
+    <div id="sideMenu">
+        <h2 style="color:var(--primary)">Menu</h2>
+        <button class="modern-btn" onclick="showScreen('screen1'); toggleMenu()">Home</button>
+        <button class="modern-btn" onclick="trocarFundo(); toggleMenu()">Trocar Fundo</button>
+        <button class="modern-btn" onclick="showScreen('screen2'); toggleMenu()">Minhas Despesas</button>
+        <button class="modern-btn" onclick="showScreen('screenSobre'); toggleMenu()">Sobre</button>
+    </div>
+
+    <div id="fundoDisplay" class="fundo-base fundo-1"></div>
+
+    <div id="screen1" class="screen active"></div>
+
+    <div id="screenSobre" class="screen">
+        <div class="card">
+            <h2>Sobre o Tá_pago?</h2>
+            <p>Sua central de gestão financeira.</p>
+        </div>
+        <button class="modern-btn" style="background:#475569" onclick="showScreen('screen1')">Voltar</button>
+    </div>
+
+    <div id="screen2" class="screen">
+        <button class="modern-btn" style="padding: 20px; font-size: 1.1rem;" onclick="showScreen('screen3')">+ Cadastrar</button>
+        <div id="listaMeses" style="width:100%;"></div>
+    </div>
+
+    <div id="screen3" class="screen">
+        <h2>Nova Despesa</h2>
+        <input type="text" id="desc" placeholder="Descrição" class="input-field">
+        <input type="text" id="valor" placeholder="R$ 0,00" class="input-field" oninput="formatarMoeda(this)">
+        <input type="date" id="data" class="input-field">
+        <select id="status" class="input-field"><option value="Pendente">Pendente</option><option value="Pago">Pago</option></select>
+        <button class="modern-btn" onclick="salvarDespesa()">Salvar</button>
+        <button class="modern-btn" style="background:#475569" onclick="showScreen('screen2')">Voltar</button>
+    </div>
+</div>
+
+<div id="popup">
+    <button class="modern-btn" style="background:#ef4444; max-width: 200px;" onclick="document.getElementById('popup').style.display='none'">Fechar X</button>
+    <div id="popupContent" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></div>
+</div>
+
+<script>
+    let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+
+    function trocarFundo() {
+        const f = document.getElementById('fundoDisplay');
+        f.classList.toggle('fundo-1');
+        f.classList.toggle('fundo-2');
+    }
+
+    function toggleMenu() { document.getElementById('sideMenu').classList.toggle('open'); }
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'screen2') renderizar();
+    }
+    
+    function formatarMoeda(i) {
+        let v = i.value.replace(/\D/g, '');
+        v = (v / 100).toFixed(2).replace('.', ',');
+        i.value = 'R$ ' + v.replace(/(\d)(\d{3})(\d{3}),/g, "$1.$2.$3,").replace(/(\d)(\d{3}),/g, "$1.$2,");
+    }
+
+    function salvarDespesa() {
+        const d = document.getElementById('desc'), v = document.getElementById('valor'), dt = document.getElementById('data');
+        if(!d.value || !v.value || !dt.value) return alert("Preencha todos os campos!");
+        const vRaw = parseFloat(v.value.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
+        despesas.push({ id: Date.now(), desc: d.value, valor: vRaw, data: dt.value, status: document.getElementById('status').value });
+        localStorage.setItem('despesas', JSON.stringify(despesas));
+        d.value = ''; v.value = ''; dt.value = '';
+        showScreen('screen2');
+    }
+
+    function renderizar() {
+        const c = document.getElementById('listaMeses');
+        c.innerHTML = '';
+        const m = [...new Set(despesas.map(d => d.data.substring(0, 7)))].sort().reverse();
+        m.forEach(mes => {
+            const l = despesas.filter(d => d.data.substring(0, 7) === mes);
+            const total = l.reduce((acc, d) => acc + d.valor, 0);
+            const todasPagas = l.every(d => d.status === 'Pago');
+            const btn = document.createElement('button');
+            btn.className = 'modern-btn';
+            btn.style.borderLeft = "8px solid " + (todasPagas ? 'var(--success)' : 'var(--danger)');
+            btn.innerHTML = `<strong>${mes}</strong><br>Total: R$ ${total.toFixed(2)}`;
+            btn.onclick = () => abrirPopup(mes);
+            c.appendChild(btn);
+        });
+    }
+
+    function abrirPopup(mes) {
+        const c = document.getElementById('popupContent');
+        c.innerHTML = `<h2>Despesas de ${mes}</h2>`;
+        despesas.filter(d => d.data.substring(0, 7) === mes).forEach(d => {
+            c.innerHTML += `<div class="card" style="border-color:${d.status==='Pago'?'var(--success)':'var(--danger)'}">
+                <strong>${d.desc}</strong><span>R$ ${d.valor.toFixed(2)}</span>
+                <select class="input-field" onchange="atualizarStatus(${d.id}, this.value, '${mes}')">
+                    <option value="Pendente" ${d.status==='Pendente'?'selected':''}>Pendente</option>
+                    <option value="Pago" ${d.status==='Pago'?'selected':''}>Pago</option>
+                </select>
+                <button class="modern-btn" style="background:var(--danger);" onclick="excluirDespesa(${d.id}, '${mes}')">Excluir</button>
+            </div>`;
+        });
+        document.getElementById('popup').style.display = 'flex';
+    }
+
+    function atualizarStatus(id, status, mes) {
+        despesas.find(x => x.id == id).status = status;
+        localStorage.setItem('despesas', JSON.stringify(despesas));
+        renderizar(); abrirPopup(mes);
+    }
+
+    function excluirDespesa(id, mes) {
+        if(confirm('Excluir esta despesa?')) {
+            despesas = despesas.filter(x => x.id !== id);
+            localStorage.setItem('despesas', JSON.stringify(despesas));
+            renderizar();
+            despesas.filter(d => d.data.substring(0, 7) === mes).length === 0 ? document.getElementById('popup').style.display = 'none' : abrirPopup(mes);
+        }
+    }
+</script>
+</body>
+</html>
