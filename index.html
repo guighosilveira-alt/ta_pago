@@ -117,32 +117,84 @@
             const btn = document.createElement('button');
             btn.className = 'modern-btn';
             btn.style.borderLeft = "8px solid " + (todasPagas ? 'var(--success)' : 'var(--danger)');
-            btn.innerHTML = `<strong>${mes}</strong><br>Total: R$ ${total.toFixed(2)}`;
+            btn.innerHTML = `<strong>${mes}</strong><br>Total: R$ ${total.toFixed(2).replace('.', ',')}`;
             btn.onclick = () => abrirPopup(mes);
             c.appendChild(btn);
         });
     }
 
-    function abrirPopup(mes) {
+    function abrirPopup(mes, editId = null) {
         const c = document.getElementById('popupContent');
         c.innerHTML = `<h2>Despesas de ${mes}</h2>`;
+        
         despesas.filter(d => d.data.substring(0, 7) === mes).forEach(d => {
-            c.innerHTML += `<div class="card" style="border-color:${d.status==='Pago'?'var(--success)':'var(--danger)'}">
-                <strong>${d.desc}</strong><span>R$ ${d.valor.toFixed(2)}</span>
-                <select class="input-field" onchange="atualizarStatus(${d.id}, this.value, '${mes}')">
-                    <option value="Pendente" ${d.status==='Pendente'?'selected':''}>Pendente</option>
-                    <option value="Pago" ${d.status==='Pago'?'selected':''}>Pago</option>
-                </select>
-                <button class="modern-btn" style="background:var(--danger);" onclick="excluirDespesa(${d.id}, '${mes}')">Excluir</button>
-            </div>`;
+            // Formata a data de YYYY-MM-DD para DD/MM/YYYY
+            const dataFormatada = d.data.split('-').reverse().join('/');
+            
+            if (d.id === editId) {
+                // Modo de Edição do Card
+                c.innerHTML += `
+                <div class="card" style="border-color:${d.status==='Pago'?'var(--success)':'var(--danger)'}">
+                    <input type="text" id="edit-desc-${d.id}" value="${d.desc}" class="input-field" style="padding: 8px; margin: 4px 0;">
+                    <input type="text" id="edit-valor-${d.id}" value="R$ ${d.valor.toFixed(2).replace('.', ',')}" class="input-field" style="padding: 8px; margin: 4px 0;" oninput="formatarMoeda(this)">
+                    <input type="date" id="edit-data-${d.id}" value="${d.data}" class="input-field" style="padding: 8px; margin: 4px 0;">
+                    <select id="edit-status-${d.id}" class="input-field" style="padding: 8px; margin: 4px 0;">
+                        <option value="Pendente" ${d.status==='Pendente'?'selected':''}>Pendente</option>
+                        <option value="Pago" ${d.status==='Pago'?'selected':''}>Pago</option>
+                    </select>
+                    <div style="display: flex; gap: 8px; width: 90%; margin-top: 8px;">
+                        <button class="modern-btn" style="background:var(--success); margin: 0; padding: 10px;" onclick="salvarEdicao(${d.id}, '${mes}')">Salvar</button>
+                        <button class="modern-btn" style="background:#475569; margin: 0; padding: 10px;" onclick="abrirPopup('${mes}')">Cancelar</button>
+                    </div>
+                </div>`;
+            } else {
+                // Visualização Padrão do Card (com Data e botão Editar)
+                c.innerHTML += `
+                <div class="card" style="border-color:${d.status==='Pago'?'var(--success)':'var(--danger)'}">
+                    <strong>${d.desc}</strong>
+                    <span>R$ ${d.valor.toFixed(2).replace('.', ',')}</span>
+                    <span style="font-size: 0.9rem; color: #94a3b8; margin: 4px 0;">Data: ${dataFormatada}</span>
+                    <span style="font-weight: bold; color: ${d.status==='Pago'?'var(--success)':'var(--danger)'}">${d.status}</span>
+                    <div style="display: flex; gap: 8px; width: 90%; margin-top: 8px;">
+                        <button class="modern-btn" style="background:var(--primary); margin: 0; padding: 10px;" onclick="abrirPopup('${mes}', ${d.id})">Editar</button>
+                        <button class="modern-btn" style="background:var(--danger); margin: 0; padding: 10px;" onclick="excluirDespesa(${d.id}, '${mes}')">Excluir</button>
+                    </div>
+                </div>`;
+            }
         });
         document.getElementById('popup').style.display = 'flex';
     }
 
-    function atualizarStatus(id, status, mes) {
-        despesas.find(x => x.id == id).status = status;
-        localStorage.setItem('despesas', JSON.stringify(despesas));
-        renderizar(); abrirPopup(mes);
+    function salvarEdicao(id, mesOriginal) {
+        const d = document.getElementById(`edit-desc-${id}`);
+        const v = document.getElementById(`edit-valor-${id}`);
+        const dt = document.getElementById(`edit-data-${id}`);
+        const s = document.getElementById(`edit-status-${id}`);
+        
+        if(!d.value || !v.value || !dt.value) return alert("Preencha todos os campos!");
+        
+        const vRaw = parseFloat(v.value.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
+        const index = despesas.findIndex(x => x.id === id);
+        
+        if (index !== -1) {
+            despesas[index].desc = d.value;
+            despesas[index].valor = vRaw;
+            despesas[index].data = dt.value;
+            despesas[index].status = s.value;
+            
+            localStorage.setItem('despesas', JSON.stringify(despesas));
+            renderizar();
+            
+            // Caso a edição altere o mês da despesa, verifica se o mês antigo ainda tem dados
+            const novoMes = dt.value.substring(0, 7);
+            const restos = despesas.filter(x => x.data.substring(0, 7) === mesOriginal).length;
+            
+            if (novoMes !== mesOriginal && restos === 0) {
+                document.getElementById('popup').style.display = 'none';
+            } else {
+                abrirPopup(restos === 0 ? novoMes : mesOriginal);
+            }
+        }
     }
 
     function excluirDespesa(id, mes) {
